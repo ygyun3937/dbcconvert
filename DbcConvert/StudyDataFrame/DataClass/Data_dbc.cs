@@ -3,190 +3,87 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using static OfficeOpenXml.ExcelErrorValue;
+using static OpenTK.Graphics.OpenGL.GL;
 
 namespace StudyDataFrame.DataClass
 {
+    public enum dbcSignalDataHeader
+    {
+        Version,
+        MessageID,
+        DLC,
+        MessageName,
+        signalName,
+        Startbit,
+        Length,
+        ByteOrder,
+        Unsigned,
+        Factor,
+        Offset,
+        Minmum,
+        Maxmum,
+        Unit,
+        Receiver,
+    }
+    class CanMessage
+    {
+        public string ID { get; set; }
+        public string Name { get; set; }
+        public string DLC { get; set; }
+        public string Transmitter { get; set; }
+        public List<CanSignal> Signals { get; set; }
+
+        public CanMessage()
+        {
+            ID = "";
+            Name = "";
+            DLC = "";
+            Transmitter = "";
+            Signals = new List<CanSignal>();
+        }
+    }
+
+    class CanSignal
+    {
+        public string signalName { get; set; }
+        public string Startbit { get; set; }
+        public string Length { get; set; }
+        public string ByteOrder { get; set; }
+        public string Unsigned { get; set; }
+        public string Factor { get; set; }
+        public string Offset { get; set; }
+        public string Minmum { get; set; }
+        public string Maxmum { get; set; }
+        public string Unit { get; set; }
+        public string Receiver { get; set; }
+    }
+
     public class Data_dbc
     {
-
-        string[] dbcHeaders = new string[Enum.GetNames(typeof(dbcPrefix)).Count()];
-        string[] dbcSignalHeaders = new string[Enum.GetNames(typeof(dbcSignalDataHeader)).Count()];
-        string MessageID;
-        string MessageName;
-        string DLC;
-        public List<SignalData> dbcData;
-        public List<string> dbcData_Test;
-
         public Data_dbc()
         {
-            //1. dbc Dictionary 생성
-            dbcData = new List<SignalData>();
-            dbcData_Test = new List<string>();
 
-            //2. dbc Header 취득
-            dbcHeaders = Enum.GetNames(typeof(dbcPrefix));
-            dbcSignalHeaders = Enum.GetNames(typeof(dbcSignalDataHeader));
         }
-        public bool LoadDbcFile(string filename)
+        public bool ConvertDbcFile(string filename, out string outputFileName)
         {
             try
             {
-                var lines = new List<string>();
-
-                StreamReader sr = new StreamReader(filename,Encoding.Default);
-                //파일라인 수 취득
-                double lineCount = File.ReadLines(filename).Count();
+                List<CanMessage> message = ParseDbcFile(filename);
 
 
-                //3. 현재 필드가 속한 Header가 무엇인지 확인하는 변수
-                string curHeader = "";
-
-
-                //4. 현재 라인 수 확인
-                double nCurrentLine = 0;
-                while (!sr.EndOfStream)
-                {
-
-                    string line = sr.ReadLine();
-                    nCurrentLine++;
-
-                    //몇앞 공백 제거
-                    line = line.TrimStart();
-
-                    if (line == "")
-                        continue;
-                    //5. 탭 구분
-                    var data = line.Split(' ');
-
-
-                    //6. 헤더 취득
-                    //6-1.헤더 면 헤더 변경
-                    int nHeader = Array.IndexOf(dbcHeaders, data[0]);
-                    if (nHeader > -1)
-                    {
-                        curHeader = dbcHeaders[nHeader];
-                    }
-
-
-                    //7. 헤더가 BO, SG 인경우
-                    if (curHeader.Equals(dbcHeaders[(int)dbcPrefix.BO_]) ||
-                        curHeader.Equals(dbcHeaders[(int)dbcPrefix.SG_]))
-                    {
-                        convertData_Dbc(curHeader, line);
-                    }
-
-
-                    //int nValue = (int)(nCurrentLine / lineCount * 100);
-                    //if (Update != null)
-                    //{
-                    //    Update(nValue);
-                    //}                
-
-
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                //_logdata.Add(ex.ToString().Split('\t'));
-
-                return false;
-            }
-
-        }
-        public void convertData_Dbc(string Header, string line)
-        {
-            switch (Header)
-            {
-                case "BO_":
-                    var MessageData = line.Split(':');
-                    var MessageInfo = MessageData[0].Split(' ');
-                    MessageID = MessageInfo[1].ToString();
-                    MessageName = MessageInfo[2].ToString();
-                    MessageInfo = MessageData[1].TrimStart().Split(' ');
-                    DLC = MessageInfo[0].ToString();
-                    break;
-                case "SG_":
-                    SignalData signalData = new SignalData();
-                    var SignalData = line.Split(':');
-                    var SignalName = SignalData[0].Split(' ');
-                    signalData.signalName = SignalName[1].ToString();   //signal Name
-
-                    var SignalInfo = SignalData[1].TrimStart().Replace("  ", " ").Replace("\"", "").Replace("\" ", "").Split(' ');
-
-
-                    var bitInfo = SignalInfo[0].Trim().Split('|');
-                    signalData.Startbit = bitInfo[0].ToString();
-                    var byteOrder = bitInfo[1].Split('@');
-                    signalData.Length = byteOrder[0].ToString();
-                    if (byteOrder[1].Contains("1"))
-                    {
-                        signalData.ByteOrder = "intel";
-                    }
-                    else
-                    {
-                        signalData.ByteOrder = "motorola";
-                    }
-                    if (byteOrder[1].Contains("+"))
-                    {
-                        signalData.Unsigned = "unsigned";
-                    }
-                    else
-                    {
-                        signalData.Unsigned = "signed";
-                    }
-
-                    SignalInfo[1] = SignalInfo[1].Replace("(", "");
-                    SignalInfo[1] = SignalInfo[1].Replace(")", "");
-
-                    var Fatorinfo = SignalInfo[1].Split(',');
-                    signalData.Factor = Fatorinfo[0].ToString();
-                    signalData.Offset = Fatorinfo[1].ToString();
-
-                    SignalInfo[2] = SignalInfo[2].Replace("[", "");
-                    SignalInfo[2] = SignalInfo[2].Replace("]", "");
-
-                    var MinMaxInfo = SignalInfo[2].Split('|');
-                    signalData.Minmum = MinMaxInfo[0].ToString();
-                    signalData.Maxmum = MinMaxInfo[1].ToString();
-
-                    var unit = SignalInfo[3];
-                    signalData.Unit = unit;
-
-                    var receiver = SignalInfo[4];
-                    signalData.Receiver = receiver;
-
-                    byte[] byteID = BitConverter.GetBytes(Convert.ToInt64(MessageID) & 0xFFFF);
-
-                    Array.Reverse(byteID);
-                    string strID = BitConverter.ToString(byteID).Replace("00", "").Replace("-", "");
-                    if (strID == "")
-                    {
-                        break;
-                    }
-                    signalData.MessageID = string.Format("0x{0}", strID);
-                    signalData.MessageName = MessageName;
-                    signalData.DLC = DLC;
-
-                    dbcData.Add(signalData);
-                    break;
-            }
-        }
-
-        public bool excelSave(string filename, out string outputFileName)
-        {
-            try
-            {
                 ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
                 ExcelPackage package = new ExcelPackage();
 
                 var worksheet = package.Workbook.Worksheets.Add("Test");
 
+                string[] dbcSignalHeaders = Enum.GetNames(typeof(dbcSignalDataHeader));
 
                 for (int nindex = 0; nindex < dbcSignalHeaders.Count(); nindex++)
                 {
@@ -194,25 +91,31 @@ namespace StudyDataFrame.DataClass
                 }
 
                 int nrow = 2;
-                foreach (var data in dbcData)
+                foreach (var data in message)
                 {
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Version + 1].Value = data.Version;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.MessageID + 1].Value = data.MessageID;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.DLC + 1].Value = data.DLC;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.MessageName + 1].Value = data.MessageName;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.signalName + 1].Value = data.signalName;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Startbit + 1].Value = data.Startbit;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Length + 1].Value = data.Length;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.ByteOrder + 1].Value = data.ByteOrder;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Unsigned + 1].Value = data.Unsigned;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Factor + 1].Value = data.Factor;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Offset + 1].Value = data.Offset;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Minmum + 1].Value = data.Minmum;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Maxmum + 1].Value = data.Maxmum;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Unit + 1].Value = data.Unit;
-                    worksheet.Cells[nrow, (int)dbcSignalDataHeader.Receiver + 1].Value = data.Receiver;
+                    //ID가 공백인 경우는 예약 메세지
+                    if (data.ID == "")
+                        continue;
 
-                    nrow++;
+                    foreach (var signaldata in data.Signals)
+                    {
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.MessageID + 1].Value = string.Format("0x{0}", data.ID);
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.DLC + 1].Value = data.DLC;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.MessageName + 1].Value = data.Name;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.signalName + 1].Value = signaldata.signalName;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Startbit + 1].Value = signaldata.Startbit;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Length + 1].Value = signaldata.Length;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.ByteOrder + 1].Value = signaldata.ByteOrder;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Unsigned + 1].Value = signaldata.Unsigned;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Factor + 1].Value = signaldata.Factor;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Offset + 1].Value = signaldata.Offset;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Minmum + 1].Value = signaldata.Minmum;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Maxmum + 1].Value = signaldata.Maxmum;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Unit + 1].Value = signaldata.Unit;
+                        worksheet.Cells[nrow, (int)dbcSignalDataHeader.Receiver + 1].Value = signaldata.Receiver;
+                        nrow++;
+                    }
+
                 }
 
 
@@ -232,6 +135,88 @@ namespace StudyDataFrame.DataClass
             }
         }
 
+        static List<CanMessage> ParseDbcFile(string path)
+        {
+            var messages = new List<CanMessage>();
+            CanMessage currentMsg = null;
 
+            foreach (var line in File.ReadLines(path, Encoding.Default))
+            {
+                if (line.StartsWith("BO_"))
+                {
+                    var match = Regex.Match(line, @"BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s+(\w+)");
+                    if (match.Success)
+                    {
+
+                        currentMsg = new CanMessage
+                        {
+                            ID = match.Groups[1].Value,
+                            Name = match.Groups[2].Value,
+                            DLC = match.Groups[3].Value,
+                            Transmitter = match.Groups[4].Value
+                        };
+
+                        byte[] byteID = BitConverter.GetBytes(Convert.ToInt64(currentMsg.ID) & 0xFFFF);
+
+                        Array.Reverse(byteID);
+                        string strID = BitConverter.ToString(byteID).Replace("-", "");
+                        strID = strID.TrimStart('0');
+
+                        currentMsg.ID = strID;
+                        messages.Add(currentMsg);
+                    }
+                }
+                //SIgnal Message 이면서 Message Info가 있는 경우
+                else if (line.TrimStart().StartsWith("SG_") && currentMsg != null)
+                {
+                    // SG_ BMSRdy : 0|1@1+ (1,0) [0|1] \"\" Vector__XXX
+                    //SG_ BMSRdy :                                  \s+(\w+)\s*:
+                    //0 start bit                                   \s*(\d+)\s*
+                    //|                                             \|
+                    //1 Length                                      \s*(\d+)
+                    //@                                             @
+                    //1 byteorder  (1: intel, 0 : motorora)         (\d)\s*
+                    //+ sign/unsign (+ : Unsigned -: signed)        ([+-])\s*
+                    //(                                             \(
+                    //1, Factor                                     ([^,]+),\s* //,을 제외한 문자
+                    //0) Offset                                     ([^)]+)\)\s*      //)을 제외한 문자                   
+                    //[
+                    //0| Minmum                                     ([^\|]+)\|\s*       //\|을 제외한 문자
+                    //1] Maxmum                                      ([^\]]+)\]\s*       //\]을 제외한 문자  
+                    //"" Unit                                       ""([^""]*)""\s        //공백과 공백사이의 ""을 제외한 문자열
+                    //Vector__XXX Receiver                          (\w+)   //문자열
+                    //정규식
+                    //* 0번이상 반복인
+                    //+ 1번이상 반복인
+                    //\s 공백
+                    //\w 문자 (+붙이면 하나이상의 문자)
+                    //\d 10진수 (+붙이면 하나이상의 10진수)
+                    //\D 숫자가 아닌 문자(\d와 반대)
+                    //[문자] 괄호안에 문자 추출
+                    //[^...] 괄호안 문자외 문자 추출
+                    var match = Regex.Match(line, @"SG_\s+(\w+)\s*:\s*(\d+)\s*\|\s*(\d+)@(\d)\s*([+-])\s*\(([^,]+),\s*([^)]+)\)\s*\[([^\|]+)\|\s*([^\]]+)\]\s*""([^""]*)""\s+(\w+)");
+
+                    if (match.Success)
+                    {
+                        var signal = new CanSignal
+                        {
+                            signalName = match.Groups[1].Value,
+                            Startbit = match.Groups[2].Value,
+                            Length = match.Groups[3].Value,
+                            ByteOrder = match.Groups[4].Value == "1" ? "intel" : "motoroa",
+                            Unsigned = match.Groups[5].Value == "+" ? "unsigned" : "signed",
+                            Factor = match.Groups[6].Value,
+                            Offset = match.Groups[7].Value,
+                            Minmum = match.Groups[8].Value,
+                            Maxmum = match.Groups[9].Value,
+                            Unit = match.Groups[10].Value,
+                            Receiver = match.Groups[11].Value
+                        };
+                        currentMsg.Signals.Add(signal);
+                    }
+                }
+            }
+            return messages;
+        }
     }
 }

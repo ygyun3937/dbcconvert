@@ -56,9 +56,6 @@ namespace StudyDataFrame
 
             tb_OutputFile.Text = outputpath;
 
-
-
-
         }
     }
 }

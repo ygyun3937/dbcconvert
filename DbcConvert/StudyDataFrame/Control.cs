@@ -38,16 +38,9 @@ namespace StudyDataFrame
                 bool nRet = true;
 
                 outputfile = "";
-                //1. File Load
-                nRet = data_Dbc.LoadDbcFile(filename);
-                if (nRet != true)
-                    return false;
-                if (Update != null)
-                {
-                    Update(80);
-                }
-                //2. File Save
-                nRet = data_Dbc.excelSave(filename, out outputfile);
+                //1. File Convert
+                nRet = data_Dbc.ConvertDbcFile(filename, out outputfile);
+               
                 if (nRet != true)
                     return false;
                 if (Update != null)
