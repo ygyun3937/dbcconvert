@@ -56,6 +56,8 @@ namespace StudyDataFrame
 
             tb_OutputFile.Text = outputpath;
 
+            MessageBox.Show("Converting 완료");
+
         }
     }
 }
